@@ -82,7 +82,7 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const investigation = await investigate(trimmed);
+      const investigation = await investigate(trimmed, user?.uid);
       setResult(investigation);
     } catch (err) {
       setError('The investigation failed. Please verify the backend is running.');

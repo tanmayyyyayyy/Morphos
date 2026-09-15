@@ -70,6 +70,42 @@ export async function saveInvestigation(record: Record<string, unknown>) {
   }
 }
 
+function initializeFirebaseAdmin() {
+  if (firebaseEnabled) {
+    return;
+  }
+
+  const hasServiceAccount = Boolean(config.firebaseClientEmail && config.firebasePrivateKey && config.firebaseProjectId);
+
+  if (hasServiceAccount) {
+    admin.initializeApp({
+      projectId: config.firebaseProjectId,
+      credential: admin.credential.cert({
+        projectId: config.firebaseProjectId,
+        clientEmail: config.firebaseClientEmail,
+        privateKey: config.firebasePrivateKey,
+      }),
+    });
+    firebaseEnabled = true;
+    return;
+  }
+
+  if (config.isFirebaseConfigured) {
+    try {
+      admin.initializeApp({
+        projectId: config.firebaseProjectId,
+        credential: admin.credential.applicationDefault(),
+      });
+      firebaseEnabled = true;
+    } catch (error) {
+      console.warn('Firebase Admin SDK unavailable without ADC or service-account credentials.', error);
+      firebaseEnabled = false;
+    }
+  }
+}
+
+initializeFirebaseAdmin();
+
 export async function getInvestigationsForUser(userId?: string) {
   if (!firebaseEnabled || !userId) {
     return [];

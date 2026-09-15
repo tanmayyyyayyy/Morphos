@@ -15,6 +15,8 @@ export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? '',
   firebaseApiKey: process.env.FIREBASE_API_KEY ?? '',
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? '',
+  firebasePrivateKey: (process.env.FIREBASE_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
   isFirebaseConfigured: Boolean(process.env.FIREBASE_PROJECT_ID),
 };
 

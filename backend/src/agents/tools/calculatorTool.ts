@@ -1,3 +1,11 @@
+/**
+ * File README
+ * What this file does: provides a tiny LangChain tool that performs a safe numeric calculation.
+ * Why it exists: the agent can use tools for structured reasoning and numerical validation during an investigation.
+ * Data in: a math expression string from the workflow or an internal experiment.
+ * Data out: a JSON result object with either the numeric result or an error payload.
+ * LangGraph connection: it is invoked by the experiment execution node when the selected experiment requires a numeric calculation.
+ */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 

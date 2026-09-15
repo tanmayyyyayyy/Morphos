@@ -1,3 +1,11 @@
+/**
+ * File README
+ * What this file does: emits realistic simulated metrics for common infrastructure performance questions.
+ * Why it exists: it gives the project a built-in demonstration dataset without requiring external services or paid APIs.
+ * Data in: a scenario name like api latency, memory usage, or database performance.
+ * Data out: a JSON payload with simulated metric values for the investigation node to interpret.
+ * LangGraph connection: this is called by the experiment execution node when the selected experiment maps to a scenario-based benchmark.
+ */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 

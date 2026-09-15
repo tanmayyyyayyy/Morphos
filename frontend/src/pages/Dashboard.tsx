@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { investigate, InvestigationResponse } from '../services/api';
+import { useEffect, useMemo, useState } from 'react';
+import { getInvestigations, investigate, InvestigationResponse } from '../services/api';
+import { signInEmail, signOutUser, signUpEmail, subscribeToAuth } from '../services/firebase';
 
 const demoQuestions = [
   'Why is API latency increasing?',
@@ -25,6 +26,50 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<InvestigationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authStatus, setAuthStatus] = useState('');
+  const [user, setUser] = useState<{ uid: string; email?: string | null } | null>(null);
+  const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((nextUser) => {
+      setUser(nextUser ? { uid: nextUser.uid, email: nextUser.email ?? undefined } : null);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setHistory([]);
+      return;
+    }
+
+    getInvestigations(user.uid)
+      .then((items) => setHistory(items))
+      .catch(() => setHistory([]));
+  }, [user]);
+
+  async function handleAuth() {
+    try {
+      if (authMode === 'register') {
+        await signUpEmail(authEmail, authPassword);
+      } else {
+        await signInEmail(authEmail, authPassword);
+      }
+      setAuthStatus('Authentication successful.');
+      setAuthPassword('');
+    } catch (err) {
+      setAuthStatus(err instanceof Error ? err.message : 'Authentication failed.');
+    }
+  }
+
+  async function handleLogout() {
+    await signOutUser();
+    setUser(null);
+    setAuthStatus('Logged out.');
+  }
 
   async function handleStart() {
     const trimmed = question.trim();
@@ -47,10 +92,18 @@ export default function Dashboard() {
   }
 
   const timeline = useMemo(() => {
-    const events = result?.events ?? ['Question interpreted', 'Hypotheses generated', 'Experiment selected', 'Running experiment', 'Analyze results', 'Final conclusion'];
+    const events = result?.events ?? [
+      { message: 'Question interpreted' },
+      { message: 'Hypotheses generated' },
+      { message: 'Experiment selected' },
+      { message: 'Running experiment' },
+      { message: 'Analyze results' },
+      { message: 'Final conclusion' },
+    ];
     return events.map((event, index) => {
+      const message = typeof event === 'string' ? event : event.message;
       const active = index <= (result ? Math.min(result.events.length - 1, 3) : 2);
-      return { event, active };
+      return { event: message, active };
     });
   }, [result]);
 
@@ -67,13 +120,39 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            Live investigation mode
+            {user ? `Signed in as ${user.email ?? 'demo user'}` : 'Live investigation mode'}
           </div>
         </header>
 
         <main className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-6">
             <div className="card">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium uppercase tracking-[0.2em] text-slate-400">Authentication</label>
+                {user ? (
+                  <button onClick={handleLogout} className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100">Log out</button>
+                ) : null}
+              </div>
+
+              {!user ? (
+                <div className="mb-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                  <input value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Email" className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-slate-100" />
+                  <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} type="password" placeholder="Password" className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-slate-100" />
+                  <div className="flex gap-2">
+                    <button onClick={() => setAuthMode('login')} className={`rounded-xl px-3 py-2 text-sm ${authMode === 'login' ? 'bg-sky-500 text-slate-950' : 'bg-slate-800 text-slate-100'}`}>Login</button>
+                    <button onClick={() => setAuthMode('register')} className={`rounded-xl px-3 py-2 text-sm ${authMode === 'register' ? 'bg-sky-500 text-slate-950' : 'bg-slate-800 text-slate-100'}`}>Register</button>
+                  </div>
+                </div>
+              ) : null}
+
+              {!user ? (
+                <button onClick={handleAuth} className="mb-3 rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-100">
+                  {authMode === 'login' ? 'Login to Firebase' : 'Create account'}
+                </button>
+              ) : null}
+
+              {authStatus ? <div className="mb-3 text-sm text-slate-300">{authStatus}</div> : null}
+
               <label className="mb-3 block text-sm font-medium uppercase tracking-[0.2em] text-slate-400">Current investigation</label>
               <textarea
                 value={question}
@@ -135,6 +214,32 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <p className="text-slate-500">No hypothesis selected yet.</p>
+              )}
+            </div>
+
+            <div className="card">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white">Investigation history</h2>
+                <span className="badge">{history.length}</span>
+              </div>
+              {history.length ? (
+                <div className="space-y-3">
+                  {history.map((item) => (
+                    <button key={String(item.id ?? Math.random())} onClick={() => setResult(item as unknown as InvestigationResponse)} className="block w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-left">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-sky-200">{String(item.question ?? 'Investigation')}</span>
+                        <span className="text-xs text-slate-400">{String(item.createdAt ?? '')}</span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                        <span>Confidence: {String(item.confidence ?? '0')}</span>
+                        <span>•</span>
+                        <span>{String(item.status ?? 'unknown')}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500">No saved investigations yet. Sign in and run an investigation to populate history.</p>
               )}
             </div>
           </section>

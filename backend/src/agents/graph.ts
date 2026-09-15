@@ -1,5 +1,13 @@
+/**
+ * File README
+ * What this file does: wires the MORPHOS investigation as a real LangGraph state machine.
+ * Why it exists: it turns the workflow into a controlled cycle with safe stopping conditions instead of a free-form chatbot loop.
+ * Data in: a user question, initial state, and the intermediate outputs created by each node.
+ * Data out: the final investigation state with a conclusion, confidence, and events list.
+ * LangGraph connection: this file defines the graph edges, nodes, and conditional branching between generateHypotheses and finalize.
+ */
 import { START, END, StateGraph, Annotation } from '@langchain/langgraph';
-import { defaultState, InvestigationState } from './state.js';
+import { createEvent, defaultState, InvestigationState, WorkflowEvent } from './state.js';
 import { interpretQuestion } from './nodes/interpretQuestion.js';
 import { generateHypotheses } from './nodes/generateHypotheses.js';
 import { selectExperiment } from './nodes/selectExperiment.js';
@@ -27,10 +35,9 @@ export async function runInvestigation(question: string): Promise<InvestigationS
     iteration: 0,
     maxIterations: 3,
     status: 'starting',
-    events: ['Investigation started'],
+    events: [createEvent('graph', 'Investigation started')],
   };
 
-  // LangGraph state machine: each node updates the shared investigation state, and the router decides whether to finalize or loop.
   const InvestigationAnnotation = Annotation.Root({
     question: Annotation<string>(),
     interpretedProblem: Annotation<string>(),
@@ -45,8 +52,8 @@ export async function runInvestigation(question: string): Promise<InvestigationS
     confidence: Annotation<number>(),
     iteration: Annotation<number>(),
     maxIterations: Annotation<number>(),
-    events: Annotation<string[]>({
-      reducer: (left: string[] = [], right: string | string[]) =>
+    events: Annotation<WorkflowEvent[]>({
+      reducer: (left: WorkflowEvent[] = [], right: WorkflowEvent | WorkflowEvent[]) =>
         Array.isArray(right) ? left.concat(right) : left.concat([right]),
       default: () => [],
     }),

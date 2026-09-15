@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateConfidence } from './evaluateConfidence.js';
-import { defaultState } from '../state.js';
+import { createEvent, defaultState } from '../state.js';
 
 describe('confidence routing', () => {
   it('returns a high confidence status when metrics indicate strong evidence', () => {
@@ -10,7 +10,7 @@ describe('confidence routing', () => {
       iteration: 1,
       confidence: 0,
       status: 'experiment_running',
-      events: ['Running experiment'],
+      events: [createEvent('evaluateConfidence', 'Running experiment')],
     };
 
     const result = evaluateConfidence(state);
@@ -25,7 +25,7 @@ describe('confidence routing', () => {
       iteration: 1,
       confidence: 0,
       status: 'experiment_running',
-      events: ['Running experiment'],
+      events: [createEvent('evaluateConfidence', 'Running experiment')],
     };
 
     const result = evaluateConfidence(state);

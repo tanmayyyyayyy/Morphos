@@ -1,3 +1,11 @@
+/**
+ * File README
+ * What this file does: benchmarks simulated system performance under a dataset size and load factor.
+ * Why it exists: it creates realistic latency and throughput numbers for the platform's demo scenarios.
+ * Data in: datasetSize and loadFactor values chosen by the agent.
+ * Data out: latency, throughput, and a summary string for downstream analysis.
+ * LangGraph connection: the experiment selection step chooses this tool when the scenario is about latency or scaling behavior.
+ */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 

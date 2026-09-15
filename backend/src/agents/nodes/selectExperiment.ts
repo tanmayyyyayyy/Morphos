@@ -1,4 +1,12 @@
-import { InvestigationState } from '../state.js';
+/**
+ * File README
+ * What this file does: selects the single most informative experiment for the current investigation.
+ * Why it exists: the workflow should avoid random tests and pick the experiment that best distinguishes between hypotheses.
+ * Data in: the current question and the generated hypotheses.
+ * Data out: the selected experiment object with its tool name and input values.
+ * LangGraph connection: it runs after generateHypotheses and before executeExperiment.
+ */
+import { createEvent, InvestigationState } from '../state.js';
 
 const scenarioToExperiment = {
   latency: {
@@ -47,6 +55,6 @@ export function selectExperiment(state: InvestigationState): InvestigationState 
       result: undefined,
     },
     status: 'experiment_selected',
-    events: [...state.events, 'Experiment selected'],
+    events: [...state.events, createEvent('selectExperiment', `Experiment selected: ${selection.name}`)],
   };
 }

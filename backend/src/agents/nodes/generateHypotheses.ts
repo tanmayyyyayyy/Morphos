@@ -1,7 +1,15 @@
+/**
+ * File README
+ * What this file does: produces candidate explanations for the investigation.
+ * Why it exists: the agent must reason about multiple plausible causes before choosing a test.
+ * Data in: the interpreted problem and the user's question.
+ * Data out: a list of hypothesis objects with rationale, evidence, and confidence.
+ * LangGraph connection: it follows interpretQuestion and precedes experiment selection.
+ */
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { z } from 'zod';
 import { config, isGeminiConfigured } from '../../config.js';
-import { Hypothesis, InvestigationState } from '../state.js';
+import { createEvent, Hypothesis, InvestigationState } from '../state.js';
 
 let ChatGoogleGenerativeAI: any = null;
 
@@ -26,9 +34,11 @@ const HypothesisListSchema = z.object({
   ),
 });
 
-const model = isGeminiConfigured
+const shouldUseLiveGemini = isGeminiConfigured && process.env.NODE_ENV !== 'test' && process.env.USE_LIVE_GEMINI !== 'false';
+
+const model = shouldUseLiveGemini
   ? new ChatGoogleGenerativeAI({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.6-flash',
       apiKey: config.geminiApiKey,
       temperature: 0.3,
     }).withStructuredOutput(HypothesisListSchema)
@@ -161,6 +171,6 @@ export async function generateHypotheses(state: InvestigationState): Promise<Inv
     ...state,
     hypotheses,
     status: 'hypotheses_ready',
-    events: [...state.events, 'Hypotheses generated'],
+    events: [...state.events, createEvent('generateHypotheses', `Generated ${hypotheses.length} hypotheses`)],
   };
 }

@@ -1,3 +1,18 @@
+/**
+ * File README
+ * What this file does: defines the shared state for the MORPHOS agent workflow.
+ * Why it exists: every LangGraph node reads and writes the same investigation structure so the loop stays consistent.
+ * Data in: the user's question plus intermediate findings, selected hypotheses, experiments, results, and status.
+ * Data out: a fully typed state object that the workflow can pass between nodes.
+ * LangGraph connection: this is the state contract used by the graph and each node that mutates the workflow.
+ */
+export type WorkflowEvent = {
+  type: 'node_completed' | 'status_changed' | 'error';
+  node: string;
+  timestamp: string;
+  message: string;
+};
+
 export type Hypothesis = {
   id: string;
   title: string;
@@ -26,10 +41,19 @@ export type InvestigationState = {
   confidence: number;
   iteration: number;
   maxIterations: number;
-  events: string[];
+  events: WorkflowEvent[];
   finalConclusion: string;
   status: string;
 };
+
+export function createEvent(node: string, message: string, type: WorkflowEvent['type'] = 'node_completed'): WorkflowEvent {
+  return {
+    type,
+    node,
+    timestamp: new Date().toISOString(),
+    message,
+  };
+}
 
 export const defaultState: InvestigationState = {
   question: '',

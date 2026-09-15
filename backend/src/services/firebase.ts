@@ -3,6 +3,7 @@ import { config } from '../config.js';
 
 let firebaseEnabled = false;
 const isTestEnvironment = process.env.NODE_ENV === 'test';
+export let firebaseAdminConfigured = false;
 
 function initializeFirebaseAdmin() {
   if (firebaseEnabled || isTestEnvironment) {
@@ -23,6 +24,7 @@ function initializeFirebaseAdmin() {
       }),
     });
     firebaseEnabled = true;
+    firebaseAdminConfigured = true;
     return;
   }
 
@@ -33,9 +35,11 @@ function initializeFirebaseAdmin() {
         credential: admin.credential.applicationDefault(),
       });
       firebaseEnabled = true;
+      firebaseAdminConfigured = true;
     } catch (error) {
       console.warn('Firebase Admin SDK unavailable without ADC or service-account credentials.', error);
       firebaseEnabled = false;
+      firebaseAdminConfigured = false;
     }
   }
 }
@@ -104,8 +108,13 @@ export async function getInvestigationsForUser(userId?: string) {
 
   try {
     const db = admin.firestore();
-    const snapshot = await db.collection('investigations').where('userId', '==', userId).orderBy('updatedAt', 'desc').get();
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const snapshot = await db.collection('investigations').where('userId', '==', userId).get();
+    const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Array<Record<string, unknown>>;
+    return items.sort((a, b) => {
+      const aTime = new Date(String((a.updatedAt ?? a.createdAt ?? 0) as string)).getTime();
+      const bTime = new Date(String((b.updatedAt ?? b.createdAt ?? 0) as string)).getTime();
+      return bTime - aTime;
+    });
   } catch (error) {
     console.warn('Firestore history unavailable in this environment.', error);
     return [];

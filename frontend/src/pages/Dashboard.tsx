@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getInvestigations, investigate, InvestigationResponse } from '../services/api';
-import { signInEmail, signOutUser, signUpEmail, subscribeToAuth } from '../services/firebase';
+import { getCurrentUserToken, signInEmail, signOutUser, signUpEmail, subscribeToAuth } from '../services/firebase';
 
 const demoQuestions = [
   'Why is API latency increasing?',
@@ -46,9 +46,17 @@ export default function Dashboard() {
       return;
     }
 
-    getInvestigations(user.uid)
-      .then((items) => setHistory(items))
-      .catch(() => setHistory([]));
+    void (async () => {
+      const token = await getCurrentUserToken();
+      if (!token) {
+        setHistory([]);
+        return;
+      }
+
+      getInvestigations(token)
+        .then((items) => setHistory(items))
+        .catch(() => setHistory([]));
+    })();
   }, [user]);
 
   async function handleAuth() {
@@ -82,10 +90,16 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      const investigation = await investigate(trimmed, user?.uid);
+      const token = await getCurrentUserToken();
+      if (!token) {
+        setError('Please sign in with Firebase before starting an investigation.');
+        return;
+      }
+
+      const investigation = await investigate(trimmed, token);
       setResult(investigation);
     } catch (err) {
-      setError('The investigation failed. Please verify the backend is running.');
+      setError('The investigation failed. Please verify the backend is running and your Firebase session is valid.');
     } finally {
       setLoading(false);
     }

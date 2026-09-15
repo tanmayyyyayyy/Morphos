@@ -21,11 +21,14 @@ export type InvestigationResponse = {
   status: string;
 };
 
-export async function investigate(question: string, userId?: string): Promise<InvestigationResponse> {
+export async function investigate(question: string, authToken: string): Promise<InvestigationResponse> {
   const response = await fetch('http://localhost:4000/api/investigate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, userId }),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({ question }),
   });
 
   if (!response.ok) {
@@ -35,9 +38,12 @@ export async function investigate(question: string, userId?: string): Promise<In
   return response.json();
 }
 
-export async function getInvestigations(userId?: string): Promise<Array<Record<string, unknown>>> {
-  const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-  const response = await fetch(`http://localhost:4000/api/investigations${query}`);
+export async function getInvestigations(authToken: string): Promise<Array<Record<string, unknown>>> {
+  const response = await fetch('http://localhost:4000/api/investigations', {
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
   if (!response.ok) {
     throw new Error('Investigation history request failed');
   }

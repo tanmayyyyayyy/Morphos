@@ -28,6 +28,7 @@ export function initFirebaseAuth() {
   const configured = firebaseStatus.configured;
 
   if (!configured) {
+    console.warn('AUTH DEBUG: Firebase initialized: false');
     return { auth: null, db: null, available: false, configured: false };
   }
 
@@ -35,6 +36,7 @@ export function initFirebaseAuth() {
     initializeApp(firebaseConfig);
   }
 
+  console.info('AUTH DEBUG: Firebase initialized: true');
   return { auth: getAuth(), db: getFirestore(), available: true, configured: true };
 }
 
@@ -44,8 +46,16 @@ export async function signUpEmail(email: string, password: string) {
     throw new Error('Firebase authentication is not configured.');
   }
 
-  const result = await createUserWithEmailAndPassword(auth, email, password);
-  return result.user;
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    console.info('AUTH DEBUG: registration result: success');
+    return result.user;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : 'unknown';
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('AUTH DEBUG: registration result: error', { code, message });
+    throw error;
+  }
 }
 
 export async function signInEmail(email: string, password: string) {
@@ -54,8 +64,16 @@ export async function signInEmail(email: string, password: string) {
     throw new Error('Firebase authentication is not configured.');
   }
 
-  const result = await signInWithEmailAndPassword(auth, email, password);
-  return result.user;
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    console.info('AUTH DEBUG: login result: success');
+    return result.user;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : 'unknown';
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('AUTH DEBUG: login result: error', { code, message });
+    throw error;
+  }
 }
 
 export async function signOutUser() {
@@ -64,6 +82,19 @@ export async function signOutUser() {
     return;
   }
   await signOut(auth);
+}
+
+export async function getCurrentUserToken(): Promise<string | null> {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth || !auth.currentUser) {
+    console.info('AUTH DEBUG: currentUser exists: false');
+    return null;
+  }
+
+  console.info('AUTH DEBUG: currentUser exists: true');
+  const token = await auth.currentUser.getIdToken();
+  console.info('AUTH DEBUG: ID token obtained: true');
+  return token;
 }
 
 export function subscribeToAuth(callback: (user: User | null) => void) {

@@ -1,43 +1,58 @@
-# MORPHOS — Autonomous AI Experimentation Platform
+# MORPHOS
 
-MORPHOS is an autonomous AI experimentation platform that takes a technical investigation question, formulates hypotheses, runs simulated experiments, and synthesizes a reasoning-based conclusion. It uses a real LangGraph state machine to make the workflow visible and stateful instead of acting like a simple chatbot.
+Autonomous AI Experimentation Platform
 
-## Architecture diagram
+"An AI system that learns by experimenting."
 
-```mermaid
-flowchart LR
-  User --> Frontend[React + Vite + Tailwind]
-  Frontend --> API[Express + TypeScript API]
-  API --> Graph[LangGraph investigation workflow]
-  Graph --> Tools[calculatorTool / benchmarkTool / mockDataTool]
-  Graph --> LLM[Gemini via LangChain if configured]
-  API --> Firebase[(Firebase Firestore fallback)]
-  Frontend --> User
-```
+MORPHOS is a local-first AI investigation platform for technical problem-solving. It combines a React dashboard, an Express API, Firebase Authentication, Firestore persistence, and a LangGraph-driven investigation workflow to turn a user question into a structured, hypothesis-based analysis flow.
 
-## Tech stack
+## Overview
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS
-- Backend: Node.js, Express, TypeScript
-- AI orchestration: LangChain, LangGraph, Gemini/Groq-ready model integration
-- Data: Firebase Firestore (with local dev fallback)
-- Deployment: Docker, Google Cloud Run, Firebase Hosting preparation
-- Source control: Git, GitHub
+The platform is designed to help users investigate complex technical issues through a repeatable loop:
+
+1. Interpret the question
+2. Generate candidate hypotheses
+3. Select an experiment strategy
+4. Run the experiment
+5. Analyze results
+6. Score confidence
+7. Finalize the conclusion or continue iterating
+
+This makes the system more transparent than a typical chatbot because each stage is observable and stateful.
+
+## Problem
+
+Modern technical investigations often involve ambiguity, incomplete information, and iterative hypothesis testing. Many AI tools produce vague answers without clearly showing how they reasoned or which experiments they considered. MORPHOS addresses that by formalizing the workflow as an evidence-driven investigation system.
 
 ## Features
 
-- Stateful workflow with LangGraph and iterative investigation loops
-- Structured hypothesis generation from the user question
-- Experiment execution with built-in simulated tools
-- Confidence scoring and iteration control
-- API with health and investigation endpoints
-- Frontend dashboard showing the agent timeline and findings
-- Firebase integration with graceful fallback for local development
-- Docker support for Cloud Run deployment
+- LangGraph-based investigation workflow with stateful transitions
+- Structured hypothesis generation and confidence scoring
+- Experiment execution through deterministic, tool-driven simulation
+- Firebase Email/Password authentication
+- Firestore-backed investigation persistence
+- Authenticated per-user investigation history
+- React + Vite frontend with lifecycle timeline and result panels
+- Express backend with health and API routes
+- Gemini integration when quota allows, with graceful fallback mode otherwise
+- Security-conscious env handling with secrets kept out of source control
 
-## LangGraph workflow explanation
+## Architecture
 
-The backend graph follows this flow:
+```mermaid
+flowchart LR
+  User --> Frontend[React + Vite + Tailwind CSS]
+  Frontend --> API[Express + TypeScript API]
+  API --> Graph[LangGraph investigation workflow]
+  Graph --> Tools[calculatorTool / benchmarkTool / mockDataTool]
+  Graph --> Gemini[Gemini via LangChain when quota is available]
+  Frontend --> FirebaseAuth[Firebase Auth]
+  API --> Firestore[(Firestore)]
+```
+
+## LangChain + LangGraph workflow
+
+The backend investigation graph follows a repeatable and observable investigation lifecycle:
 
 1. interpretQuestion
 2. generateHypotheses
@@ -45,81 +60,155 @@ The backend graph follows this flow:
 4. executeExperiment
 5. analyzeResults
 6. evaluateConfidence
-7. finalize when the confidence threshold is reached, otherwise loop back to hypothesis generation
+7. finalize
 
-The state includes question, interpretedProblem, hypotheses, selectedHypothesis, experiment, experimentResult, analysis, confidence, iteration, maxIterations, events, finalConclusion, and status. A safe maximum iteration count prevents infinite loops.
+The workflow stores structured state including:
+- question
+- interpretedProblem
+- hypotheses
+- selectedHypothesis
+- experiment
+- experimentResult
+- analysis
+- confidence
+- iteration
+- maxIterations
+- events
+- finalConclusion
+- status
 
-## LangChain usage
+A safe iteration cap prevents runaway loops during local development and demo usage.
 
-The project demonstrates actual LangChain tooling:
+## Firebase Authentication
 
-- Chat model integration with Gemini when an API key is supplied
-- Structured output generation for hypothesis creation
-- Prompt templates for investigation planning
-- Tool integration through calculatorTool, benchmarkTool, and mockDataTool
+MORPHOS supports Firebase Email/Password authentication on the frontend and verifies Firebase ID tokens on the backend before processing investigation requests.
 
-If no Gemini key is configured, the app falls back to deterministic simulation logic so the workflow still runs locally without external API access.
+Behavior:
+- User registers or logs in with Firebase client SDK
+- Client gets a Firebase ID token
+- Backend reads the Authorization header and verifies the token with Firebase Admin SDK
+- The decoded UID is used as the real ownership source for persistence and history access
 
-## Firebase architecture
+This ensures the app does not trust a user-provided UID in the request body.
 
-The app is prepared for Firebase Authentication and Firestore. The implementation includes a storage layer with a clean development fallback when credentials are unavailable. The expected collections are:
+## Firestore persistence
 
-- users
-- investigations
-- experiments
-- findings
+Investigation records are stored in Firestore using the authenticated UID as the ownership key. The backend persists structured results and exposes history endpoints that return only the current user’s records.
 
-Investigation records include question, hypotheses, experiments, analysis, confidence, finalConclusion, and timestamps.
+Important note:
+- Real Firestore write and read functionality has been verified in the local environment.
+- Firestore rules are present in the repository, but their deployment and runtime testing remain separate from the app code and are not claimed as verified unless the Firebase CLI deployment is completed.
 
-## GCP architecture
+## React + Vite frontend
 
-The backend is prepared for Google Cloud Run deployment via Docker. The frontend can be deployed to Firebase Hosting or any static host. The deployment pattern is:
+The frontend is a single-page app built with React and Vite. It includes:
+- authentication state
+- investigation input
+- workflow timeline
+- current hypothesis view
+- investigation history list
+- result and final conclusion panels
 
-- Backend container on Cloud Run
-- Frontend static bundle served from Firebase Hosting or Vite preview build
-- Firebase credentials kept in environment variables and not committed to source control
+## Express backend
+
+The backend exposes:
+- health endpoint
+- investigation execution endpoint
+- investigation history endpoint
+- authenticated investigation detail access
+
+It is designed to keep the AI workflow and API concerns separate while still supporting local development and real Firebase-backed ownership enforcement.
+
+## Gemini integration
+
+Gemini is integrated through LangChain, but the current runtime limitation is free-tier quota exhaustion. When the provider is unavailable, the app retains deterministic local behavior so the workflow continues without failing the application itself.
+
+Current status:
+- LangChain integration is present and working
+- LangGraph workflow remains intact
+- Tool execution remains intact
+- Gemini live calls are currently blocked by provider quota exhaustion (HTTP 429)
+
+The application clearly reports this availability problem instead of pretending the live model is operational.
+
+## Experiment and tool system
+
+The investigation graph executes deterministic experiment flows via built-in tools such as:
+- calculatorTool
+- benchmarkTool
+- mockDataTool
+
+These simulate technical investigation paths so the platform remains testable and usable even when an external LLM provider is unavailable.
+
+## Project structure
+
+```text
+.
+├── .env.example
+├── .gitignore
+├── README.md
+├── firestore.rules
+├── package.json
+├── package-lock.json
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── src/
+│   │   ├── agents/
+│   │   ├── config.ts
+│   │   ├── routes/
+│   │   ├── server.ts
+│   │   └── services/
+│   └── tsconfig.json
+├── frontend/
+│   ├── package.json
+│   ├── src/
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── tsconfig.json
+└── docker-compose.yml
+```
 
 ## Local setup
 
 1. Install dependencies:
-   ```bash
-   npm install
-   ```
 
-2. Copy the environment file:
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+npm install
+```
 
-3. Update the values in `.env` with your actual keys if needed.
+2. Create a local env file from the example:
+
+```bash
+cp .env.example .env
+```
+
+3. Fill in any required values locally as needed for your Firebase and Gemini configuration.
 
 4. Start the backend:
-   ```bash
-   npm run dev --workspace backend
-   ```
+
+```bash
+npm run dev --workspace backend
+```
 
 5. Start the frontend:
-   ```bash
-   npm run dev --workspace frontend
-   ```
 
-6. Open the app in the browser:
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:4000/api
+```bash
+npm run dev --workspace frontend
+```
+
+6. Open the app locally in the browser:
+- Frontend: http://localhost:5173
+- Backend: http://localhost:4000/api
 
 ## Environment variables
 
-Required for local development:
+Use only locally managed values and keep secrets out of source control.
 
 ```env
 PORT=4000
 FRONTEND_ORIGIN=http://localhost:5173
 GEMINI_API_KEY=your_gemini_api_key
-```
-
-Optional Firebase setup:
-
-```env
 FIREBASE_PROJECT_ID=your_firebase_project_id
 FIREBASE_API_KEY=your_firebase_api_key
 FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -129,47 +218,61 @@ FIREBASE_APP_ID=your_firebase_app_id
 FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
-## Demo examples
+No private keys or service-account JSON should be committed to the repository.
 
-Use these example questions with the dashboard or API:
+## API endpoints
 
-- Why is API latency increasing?
-- Why does database performance degrade with increasing traffic?
-- Why is memory usage growing over time?
-- Why does processing time increase dramatically as dataset size grows?
+### Health
 
-## Deployment instructions
-
-### Backend on Cloud Run
-
-```bash
-cd backend
-docker build -t morphos-backend .
+```http
+GET /api/health
 ```
 
-Then deploy with gcloud:
+### Investigate
 
-```bash
-gcloud run deploy morphos-backend --source . --region us-central1 --allow-unauthenticated
+```http
+POST /api/investigate
+Authorization: Bearer <firebase-id-token>
+Content-Type: application/json
 ```
 
-### Frontend
+Body:
 
-```bash
-cd frontend
-npm run build
+```json
+{
+  "question": "Why is API latency increasing?"
+}
 ```
 
-The resulting static bundle in `frontend/dist` can be deployed to Firebase Hosting or any static host.
+### Investigation history
+
+```http
+GET /api/investigations
+Authorization: Bearer <firebase-id-token>
+```
+
+## Security
+
+- Secret values are kept in local environment files and ignored by Git
+- Firebase Admin credentials are never exposed to the frontend
+- Backend token verification is required for authenticated routes
+- Ownership is derived from the verified Firebase UID rather than request data
+- No secrets or private keys are committed to source control
+
+## Current limitations
+
+- Gemini free-tier quota exhaustion can temporarily block live LLM access
+- Firestore security rules are present in the repo but require Firebase CLI deployment and runtime validation before being claimed as deployed
+- Local demo behavior intentionally uses deterministic tool execution when external AI is unavailable
 
 ## Future improvements
 
-- Add actual Firebase authentication and protected project dashboards
-- Add a richer experiment library with real telemetry connectors
-- Add a persistent conversation and investigation history feed
-- Add artifact export and PDF summaries
-- Integrate more AI model providers and tool execution frameworks
+- Connect to more real telemetry sources and observability pipelines
+- Add richer experiment strategy libraries
+- Expand Firestore rules and production deployment validation
+- Add more artifact export and reporting tooling
+- Support additional AI providers with graceful fallback chaining
 
 ## Notes
 
-The MVP intentionally uses simulated performance experiments for local development and demonstration purposes, while the architecture is structured so real tools and services can be added later without rewriting the workflow.
+This project is intentionally structured so the investigation engine, authentication layer, and persistence model can evolve without rewriting the core workflow. The current verified state is a working local platform with Firebase-backed auth and Firestore persistence, while the live Gemini provider remains constrained by quota availability.

@@ -18,6 +18,7 @@ export const config = {
   firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? '',
   firebasePrivateKey: (process.env.FIREBASE_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
   isFirebaseConfigured: Boolean(process.env.FIREBASE_PROJECT_ID),
+  hasAdminServiceAccount: Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY),
 };
 
 export const isGeminiConfigured = Boolean(config.geminiApiKey);

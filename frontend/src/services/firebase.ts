@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -19,22 +20,27 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-export function initFirebaseAuth(): { auth: Auth | null; available: boolean } {
-  const hasConfig = Object.values(firebaseConfig).every((value) => Boolean(value));
-  if (!hasConfig) {
-    return { auth: null, available: false };
+export const firebaseStatus = {
+  configured: Object.values(firebaseConfig).every((value) => typeof value === 'string' && value.trim().length > 0),
+};
+
+export function initFirebaseAuth() {
+  const configured = firebaseStatus.configured;
+
+  if (!configured) {
+    return { auth: null, db: null, available: false, configured: false };
   }
 
   if (!getApps().length) {
     initializeApp(firebaseConfig);
   }
 
-  return { auth: getAuth(), available: true };
+  return { auth: getAuth(), db: getFirestore(), available: true, configured: true };
 }
 
 export async function signUpEmail(email: string, password: string) {
-  const { auth, available } = initFirebaseAuth();
-  if (!available || !auth) {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth) {
     throw new Error('Firebase authentication is not configured.');
   }
 
@@ -43,8 +49,8 @@ export async function signUpEmail(email: string, password: string) {
 }
 
 export async function signInEmail(email: string, password: string) {
-  const { auth, available } = initFirebaseAuth();
-  if (!available || !auth) {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth) {
     throw new Error('Firebase authentication is not configured.');
   }
 
@@ -53,16 +59,16 @@ export async function signInEmail(email: string, password: string) {
 }
 
 export async function signOutUser() {
-  const { auth, available } = initFirebaseAuth();
-  if (!available || !auth) {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth) {
     return;
   }
   await signOut(auth);
 }
 
 export function subscribeToAuth(callback: (user: User | null) => void) {
-  const { auth, available } = initFirebaseAuth();
-  if (!available || !auth) {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth) {
     callback(null);
     return () => undefined;
   }

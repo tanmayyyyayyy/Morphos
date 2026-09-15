@@ -2,80 +2,16 @@ import admin from 'firebase-admin';
 import { config } from '../config.js';
 
 let firebaseEnabled = false;
-
-try {
-  if (config.isFirebaseConfigured) {
-    admin.initializeApp({
-      projectId: config.firebaseProjectId,
-      credential: admin.credential.applicationDefault(),
-    });
-    firebaseEnabled = true;
-  }
-} catch (error) {
-  firebaseEnabled = false;
-}
-
-function stripUndefined(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(stripUndefined).filter((item) => item !== undefined);
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, nested]) => nested !== undefined)
-        .map(([key, nested]) => [key, stripUndefined(nested)]),
-    );
-  }
-
-  return value;
-}
-
-function normalizeInvestigation(record: Record<string, unknown>) {
-  const cleanRecord = stripUndefined(record) as Record<string, unknown>;
-  return {
-    ...cleanRecord,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-export async function saveInvestigation(record: Record<string, unknown>) {
-  if (!firebaseEnabled) {
-    return {
-      stored: false,
-      mode: 'dev-fallback',
-      record,
-    };
-  }
-
-  try {
-    const db = admin.firestore();
-    const ref = db.collection('investigations').doc();
-    const payload = normalizeInvestigation(record);
-    await ref.set(payload);
-
-    return {
-      stored: true,
-      id: ref.id,
-      mode: 'firebase',
-    };
-  } catch (error) {
-    console.warn('Firebase persistence unavailable; switching to local fallback.', error);
-    return {
-      stored: false,
-      mode: 'dev-fallback',
-      record,
-    };
-  }
-}
+const isTestEnvironment = process.env.NODE_ENV === 'test';
 
 function initializeFirebaseAdmin() {
-  if (firebaseEnabled) {
+  if (firebaseEnabled || isTestEnvironment) {
     return;
   }
 
-  const hasServiceAccount = Boolean(config.firebaseClientEmail && config.firebasePrivateKey && config.firebaseProjectId);
+  const hasServiceAccount = Boolean(
+    config.firebaseProjectId && config.firebaseClientEmail && config.firebasePrivateKey,
+  );
 
   if (hasServiceAccount) {
     admin.initializeApp({
@@ -106,8 +42,63 @@ function initializeFirebaseAdmin() {
 
 initializeFirebaseAdmin();
 
+function stripUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefined).filter((item) => item !== undefined);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, nested]) => nested !== undefined)
+        .map(([key, nested]) => [key, stripUndefined(nested)]),
+    );
+  }
+
+  return value;
+}
+
+function normalizeInvestigation(record: Record<string, unknown>) {
+  const cleanRecord = stripUndefined(record) as Record<string, unknown>;
+  return {
+    ...cleanRecord,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function saveInvestigation(record: Record<string, unknown>) {
+  if (isTestEnvironment || !firebaseEnabled) {
+    return {
+      stored: false,
+      mode: 'dev-fallback',
+      record,
+    };
+  }
+
+  try {
+    const db = admin.firestore();
+    const ref = db.collection('investigations').doc();
+    const payload = normalizeInvestigation(record);
+    await ref.set(payload);
+
+    return {
+      stored: true,
+      id: ref.id,
+      mode: 'firebase',
+    };
+  } catch (error) {
+    console.warn('Firebase persistence unavailable; switching to local fallback.', error);
+    return {
+      stored: false,
+      mode: 'dev-fallback',
+      record,
+    };
+  }
+}
+
 export async function getInvestigationsForUser(userId?: string) {
-  if (!firebaseEnabled || !userId) {
+  if (isTestEnvironment || !firebaseEnabled || !userId) {
     return [];
   }
 
@@ -122,7 +113,7 @@ export async function getInvestigationsForUser(userId?: string) {
 }
 
 export async function getInvestigationById(id: string) {
-  if (!firebaseEnabled) {
+  if (isTestEnvironment || !firebaseEnabled) {
     return null;
   }
 
@@ -137,7 +128,7 @@ export async function getInvestigationById(id: string) {
 }
 
 export async function saveFinding(record: Record<string, unknown>) {
-  if (!firebaseEnabled) {
+  if (isTestEnvironment || !firebaseEnabled) {
     return { stored: false, mode: 'dev-fallback', record };
   }
 

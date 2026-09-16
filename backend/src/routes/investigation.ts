@@ -3,7 +3,7 @@ import { z } from 'zod';
 import admin from 'firebase-admin';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { runInvestigation } from '../agents/graph.js';
-import { getInvestigationById, getInvestigationsForUser, saveInvestigation } from '../services/firebase.js';
+import { deleteInvestigation, getAnalyticsForUser, getInvestigationById, getInvestigationsForUser, saveInvestigation } from '../services/firebase.js';
 
 const router = Router();
 
@@ -71,6 +71,46 @@ router.get('/investigations/:id', requireAuth, async (req: AuthenticatedRequest,
   } catch (error) {
     console.error('Failed to fetch investigation', error);
     return res.status(500).json({ error: 'Investigation detail unavailable' });
+  }
+});
+
+router.get('/analytics', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: 'Authenticated UID is required.' });
+    }
+    const analytics = await getAnalyticsForUser(uid);
+    return res.json(analytics);
+  } catch (error) {
+    console.error('Failed to compute analytics', error);
+    return res.status(500).json({ error: 'Analytics unavailable' });
+  }
+});
+
+router.delete('/investigations/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const item = await getInvestigationById(id);
+
+    if (!item) {
+      return res.status(404).json({ error: 'Investigation not found' });
+    }
+
+    const record = item as Record<string, unknown>;
+    if (req.user && record.userId !== req.user.uid) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const deleted = await deleteInvestigation(id, req.user?.uid);
+    if (!deleted) {
+      return res.status(403).json({ error: 'Unable to delete investigation.' });
+    }
+
+    return res.json({ success: true, deletedId: id });
+  } catch (error) {
+    console.error('Failed to delete investigation', error);
+    return res.status(500).json({ error: 'Investigation deletion unavailable' });
   }
 });
 

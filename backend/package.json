@@ -12,11 +12,13 @@
   "dependencies": {
     "@langchain/core": "^1.2.11",
     "@langchain/google-genai": "^2.3.2",
+    "@langchain/langgraph": "^0.3.12",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
     "firebase-admin": "^12.4.0",
-    "@langchain/langgraph": "^0.3.12",
+    "helmet": "^8.3.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

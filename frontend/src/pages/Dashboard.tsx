@@ -122,7 +122,7 @@ function safeNumber(value: unknown, fallback = 0) {
 }
 
 export default function Dashboard() {
-  const [question, setQuestion] = useState('What do you want to investigate?');
+  const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -329,7 +329,7 @@ export default function Dashboard() {
 
   async function handleStart() {
     const trimmed = question.trim();
-    if (!trimmed || trimmed === 'What do you want to investigate?') {
+    if (!trimmed) {
       setError('Enter a technical investigation question first.');
       pushToast('Enter a question before starting.', 'error');
       return;
@@ -519,6 +519,37 @@ export default function Dashboard() {
     return { investigations: investigationMatches.slice(0, 6), experiments: experimentMatches.slice(0, 6) };
   }, [history, experiments, searchQuery]);
 
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    const onPaletteKeyDown = (event: KeyboardEvent) => {
+      const results = [...searchResults.investigations, ...searchResults.experiments];
+      if (!results.length) return;
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSearchIndex((current) => (current + 1) % results.length);
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSearchIndex((current) => (current - 1 + results.length) % results.length);
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const item = results[searchIndex];
+        if (item && 'question' in item) {
+          void openInvestigation(String(item.id ?? ''));
+          setSearchOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onPaletteKeyDown);
+    return () => window.removeEventListener('keydown', onPaletteKeyDown);
+  }, [searchOpen, searchResults, searchIndex]);
+
   const totalInvestigations = analytics.totalInvestigations || history.length;
   const experimentsRun = analytics.totalExperiments || experiments.length;
   const avgConfidence = analytics.averageConfidence || (history.length ? history.reduce((sum, item) => sum + safeNumber(item.confidence, 0), 0) / history.length : 0);
@@ -557,14 +588,14 @@ export default function Dashboard() {
   const renderOverview = () => (
     <div className="space-y-6">
       <section className="panel hero-panel">
-        <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            <div className="badge badge-muted mb-4">AI PROVIDER STATUS</div>
-            <h1 className="display-heading">Investigate. Experiment. Learn.</h1>
-            <p className="hero-copy">MORPHOS turns technical questions into structured investigations with real workflow tracking, evidence, and measured confidence.</p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button className="action-button primary" onClick={() => setActiveView('investigations')}>+ Start New Investigation</button>
-              <button className="action-button secondary" onClick={() => setActiveView('investigations')}>View Investigations</button>
+        <div className="hero-layout">
+          <div className="hero-copy-block">
+            <div className="badge badge-muted">AI EXPERIMENTATION ENGINE</div>
+            <h1 className="display-heading">Turn questions into evidence.</h1>
+            <p className="hero-copy">MORPHOS investigates technical problems by generating hypotheses, running experiments, analyzing evidence, and evaluating confidence.</p>
+            <div className="hero-actions">
+              <button className="action-button primary" onClick={() => setActiveView('investigations')}>Start Investigation</button>
+              <button className="action-button secondary" onClick={() => setActiveView('experiments')}>View Experiments</button>
             </div>
           </div>
           <div className="status-card">
@@ -578,29 +609,42 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="metrics-grid">
-        <MetricCard label="Investigations" value={String(totalInvestigations)} tone="sky" />
-        <MetricCard label="Experiments" value={String(experimentsRun)} tone="violet" />
-        <MetricCard label="Avg Confidence" value={`${Math.round(avgConfidence * 100)}%`} tone="emerald" />
-        <MetricCard label="Completion Rate" value={`${Math.round(completionRate)}%`} tone="amber" />
+      <section className="metric-strip" aria-label="Key metrics">
+        <div className="metric-item">
+          <span className="metric-kicker">Investigations</span>
+          <strong>{totalInvestigations}</strong>
+        </div>
+        <div className="metric-item">
+          <span className="metric-kicker">Experiments</span>
+          <strong>{experimentsRun}</strong>
+        </div>
+        <div className="metric-item">
+          <span className="metric-kicker">Avg. confidence</span>
+          <strong>{Math.round(avgConfidence * 100)}%</strong>
+        </div>
+        <div className="metric-item">
+          <span className="metric-kicker">Completion</span>
+          <strong>{Math.round(completionRate)}%</strong>
+        </div>
       </section>
 
       <section className="content-grid">
-        <div className="panel">
-          <div className="panel-header">
+        <div className="composer-panel">
+          <div className="panel-header compact-header">
             <div><p className="eyebrow">Workspace</p><h2>New Investigation</h2></div>
+            <div className="composer-hint">⌘ ↵ Investigate</div>
           </div>
 
-          <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={6} className="field-input command-input" placeholder="What do you want to investigate?" aria-label="Investigation question" />
+          <textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={6} className="field-input command-input" placeholder="Ask MORPHOS to investigate something..." aria-label="Investigation question" />
 
-          <div className="chip-row mt-4">
+          <div className="chip-row">
             {demoQuestions.map((example) => (
               <button key={example} className="chip" onClick={() => setQuestion(example)}>{example}</button>
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button className="action-button primary" onClick={handleStart} disabled={loading} aria-label="Start investigation">Start Investigation →</button>
+          <div className="composer-actions">
+            <button className="action-button primary" onClick={handleStart} disabled={loading} aria-label="Start investigation">Start Investigation</button>
             <button className="action-button secondary" onClick={async () => {
               setQuestion('Why is API latency increasing?');
               setDemoMode(true);
@@ -627,14 +671,14 @@ export default function Dashboard() {
                 setLoading(false);
                 setWorkflowStage(0);
               }
-            }} aria-label="Try demo investigation">TRY DEMO</button>
+            }} aria-label="Try demo investigation">Try Demo</button>
           </div>
 
           {error ? <div className="error-box mt-4">{error}</div> : null}
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
+        <div className="panel recent-panel">
+          <div className="panel-header compact-header">
             <div><p className="eyebrow">Recent</p><h2>Recent Investigations</h2></div>
           </div>
 
@@ -646,8 +690,8 @@ export default function Dashboard() {
                   <span className={`tiny-badge ${statusColors[String(item.status ?? 'idle')] ?? 'bg-slate-700'}`}>{String(item.status ?? 'idle')}</span>
                 </div>
                 <div className="list-meta-row">
-                  <span>Confidence {safeNumber(item.confidence, 0).toFixed(2)}</span>
-                  <span>Iterations {safeNumber(item.iteration, 0)}</span>
+                  <span>{safeNumber(item.confidence, 0).toFixed(2)} confidence</span>
+                  <span>{safeNumber(item.iteration, 0)} iter.</span>
                   <span>{formatRelativeTime(String(item.createdAt ?? ''))}</span>
                 </div>
               </button>
@@ -1069,7 +1113,7 @@ export default function Dashboard() {
               <span>Search</span>
               <button className="icon-button" onClick={() => setSearchOpen(false)}>✕</button>
             </div>
-            <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="field-input" placeholder="Search investigations, experiments, conclusions..." aria-label="Search" />
+            <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="field-input command-search" placeholder="Search investigations, experiments, conclusions..." aria-label="Search" />
             <div className="search-results">
               {searchResultsFlat.length ? (
                 <>

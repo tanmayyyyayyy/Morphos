@@ -9,6 +9,16 @@
 import { createEvent, InvestigationState } from '../state.js';
 
 export function analyzeResults(state: InvestigationState): InvestigationState {
+  if (state.domain === 'ml_model_performance' || !state.experimentResult || state.resultStatus === 'no_matching_template') {
+    const analysis = `No matching experiment was available for this question. Evaluated domain hypotheses based on model architecture and data scaling theory: primary suspected factor is ${state.selectedHypothesis?.title.toLowerCase() || 'model generalization degradation'}. These are domain-based hypotheses, not measured findings; validate them with real model training and evaluation data.`;
+    return {
+      ...state,
+      analysis,
+      status: 'analyzed',
+      events: [...state.events, createEvent('analyzeResults', 'Hypothesis-based reasoning completed (no matching experiment template)')],
+    };
+  }
+
   const result = state.experimentResult ?? {};
   const metrics = (result as any).metrics ?? {};
   const latency = (result as any).latencyMs ?? metrics.databaseLatency ?? 0;

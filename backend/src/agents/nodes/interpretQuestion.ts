@@ -7,26 +7,16 @@
  * LangGraph connection: this is the first node after START and feeds directly into hypothesis generation.
  */
 import { createEvent, InvestigationState } from '../state.js';
+import { classifyDomain } from '../domain.js';
 
 export function interpretQuestion(state: InvestigationState): InvestigationState {
-  const question = state.question.trim();
-  const normalized = question.toLowerCase();
-
-  const problemMap = [
-    { keyword: 'latency', pattern: 'Investigating API latency and request performance under rising demand.' },
-    { keyword: 'database', pattern: 'Investigating database throughput and query latency as load increases.' },
-    { keyword: 'memory', pattern: 'Investigating memory growth and retention patterns over time.' },
-    { keyword: 'dataset', pattern: 'Investigating scaling behavior and computational cost as dataset size increases.' },
-  ];
-
-  const interpretedProblem =
-    problemMap.find((entry) => normalized.includes(entry.keyword))?.pattern ??
-    'Investigating the underlying performance bottleneck described by the user question.';
+  const { domain, interpretedProblem } = classifyDomain(state.question);
 
   return {
     ...state,
+    domain,
     interpretedProblem,
     status: 'interpreted',
-    events: [...state.events, createEvent('interpretQuestion', 'Question interpreted')],
+    events: [...state.events, createEvent('interpretQuestion', `Question interpreted for domain: ${domain}`)],
   };
 }

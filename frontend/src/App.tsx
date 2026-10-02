@@ -31,6 +31,8 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
+import { generateDomainInvestigation } from './services/domain';
+
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
 import DemoInvestigationModal from './components/DemoInvestigationModal';
@@ -116,15 +118,51 @@ const DEMO_INVESTIGATION_DATA: InvestigationRecord = {
   updatedAt: new Date().toISOString(),
 };
 
+function resolveRoute(path: string): {
+  mode: 'landing' | 'workspace' | 'privacy' | 'terms' | '404';
+  view?: ViewId;
+  investigationId?: string;
+} {
+  const cleanPath = path.split('?')[0].split('#')[0];
+  if (cleanPath === '/' || cleanPath === '') {
+    return { mode: 'landing' };
+  }
+  if (cleanPath === '/privacy') {
+    return { mode: 'privacy' };
+  }
+  if (cleanPath === '/terms') {
+    return { mode: 'terms' };
+  }
+  if (cleanPath === '/workspace') {
+    return { mode: 'workspace', view: 'overview' };
+  }
+  if (cleanPath === '/history' || cleanPath === '/investigations') {
+    return { mode: 'workspace', view: 'investigations' };
+  }
+  if (cleanPath === '/experiments') {
+    return { mode: 'workspace', view: 'experiments' };
+  }
+  if (cleanPath === '/analytics') {
+    return { mode: 'workspace', view: 'analytics' };
+  }
+  if (cleanPath === '/settings') {
+    return { mode: 'workspace', view: 'profile' };
+  }
+  const match = cleanPath.match(/^\/investigations\/([^/]+)$/);
+  if (match) {
+    return { mode: 'workspace', view: 'investigations', investigationId: match[1] };
+  }
+  return { mode: '404' };
+}
+
 export default function App() {
   // Navigation & View State
   const [appMode, setAppMode] = useState<'landing' | 'workspace' | 'privacy' | 'terms' | '404'>(() => {
-    const path = window.location.pathname;
-    if (path === '/privacy') return 'privacy';
-    if (path === '/terms') return 'terms';
-    return 'landing';
+    return resolveRoute(window.location.pathname).mode;
   });
-  const [activeWorkspaceView, setActiveWorkspaceView] = useState<ViewId>('overview');
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<ViewId>(() => {
+    return resolveRoute(window.location.pathname).view ?? 'overview';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // User & Auth State
@@ -140,18 +178,27 @@ export default function App() {
   const [currentInvestigation, setCurrentInvestigation] = useState<InvestigationRecord | null>(null);
 
   // Firestore History & Analytics
-  const [history, setHistory] = useState<InvestigationRecord[]>([DEMO_INVESTIGATION_DATA]);
+  const [history, setHistory] = useState<InvestigationRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('morphos_guest_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [analytics, setAnalytics] = useState<AnalyticsState>({
-    totalInvestigations: 1,
-    completedInvestigations: 1,
-    averageConfidence: 0.87,
-    averageIterations: 3,
-    totalExperiments: 1,
-    completionRate: 100,
-    confidenceDistribution: { high: 1, medium: 0, low: 0 },
-    experimentOutcomes: { completed: 1, failed: 0, running: 0 },
-    investigationsOverTime: [{ date: '2026-09-28', count: 1 }],
-    iterationsPerInvestigation: [{ label: 'API Latency', iterations: 3 }],
+    totalInvestigations: 0,
+    completedInvestigations: 0,
+    averageConfidence: 0,
+    averageIterations: 0,
+    totalExperiments: 0,
+    completionRate: 0,
+    confidenceDistribution: { high: 0, medium: 0, low: 0 },
+    experimentOutcomes: { completed: 0, failed: 0, running: 0 },
+    investigationsOverTime: [],
+    iterationsPerInvestigation: [],
   });
 
   // Toasts
@@ -185,9 +232,8 @@ export default function App() {
       ]);
 
       if (items.status === 'fulfilled' && Array.isArray(items.value)) {
-        if (items.value.length > 0) {
-          setHistory(items.value as InvestigationRecord[]);
-        }
+        // Correctly set history even if empty list is returned
+        setHistory(items.value as InvestigationRecord[]);
       }
 
       if (stats.status === 'fulfilled' && stats.value) {
@@ -206,45 +252,35 @@ export default function App() {
 
   // URL Deep-linking handler
   useEffect(() => {
-    const path = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
     const modeParam = params.get('mode');
     const tabParam = params.get('tab') as ViewId | null;
     const invParam = params.get('investigation');
 
-    if (path === '/privacy') { setAppMode('privacy'); return; }
-    if (path === '/terms') { setAppMode('terms'); return; }
+    const handleNavigation = (path: string) => {
+      const resolved = resolveRoute(path);
+      setAppMode(resolved.mode);
+      if (resolved.view) {
+        setActiveWorkspaceView(resolved.view);
+      }
+      if (resolved.investigationId) {
+        void openInvestigationById(resolved.investigationId);
+      }
+    };
 
     if (modeParam === 'workspace') {
       setAppMode('workspace');
       if (tabParam) setActiveWorkspaceView(tabParam);
-    }
-
-    if (invParam) {
+    } else if (invParam) {
       setAppMode('workspace');
       void openInvestigationById(invParam);
-      return;
-    }
-
-    const match = path.match(/^\/investigations\/([^/]+)$/);
-    if (match) {
-      void openInvestigationById(match[1]);
-      return;
+    } else {
+      handleNavigation(window.location.pathname);
     }
 
     // Sync popstate (browser back/forward button)
     const handlePopState = () => {
-      const currentPath = window.location.pathname;
-      if (currentPath === '/privacy') { setAppMode('privacy'); return; }
-      if (currentPath === '/terms') { setAppMode('terms'); return; }
-      if (currentPath === '/' || currentPath === '') { setAppMode('landing'); return; }
-      const match = currentPath.match(/^\/investigations\/([^/]+)$/);
-      if (match) {
-        setAppMode('workspace');
-        void openInvestigationById(match[1]);
-        return;
-      }
-      setAppMode('404');
+      handleNavigation(window.location.pathname);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -260,37 +296,73 @@ export default function App() {
     } else if (appMode === '404') {
       document.title = '404 Not Found — MORPHOS';
     } else if (appMode === 'workspace') {
-      document.title = 'Workspace — MORPHOS';
+      if (currentInvestigation) {
+        document.title = 'Investigation Detail — MORPHOS';
+      } else if (activeWorkspaceView === 'investigations') {
+        document.title = 'Investigation History — MORPHOS';
+      } else if (activeWorkspaceView === 'analytics') {
+        document.title = 'Analytics & Telemetry — MORPHOS';
+      } else if (activeWorkspaceView === 'experiments') {
+        document.title = 'Experiments — MORPHOS';
+      } else if (activeWorkspaceView === 'profile') {
+        document.title = 'Settings — MORPHOS';
+      } else {
+        document.title = 'Workspace — MORPHOS';
+      }
     } else {
       document.title = 'MORPHOS — Autonomous AI Experimentation Platform';
       trackEvent({ name: 'landing_page_view' });
     }
-  }, [appMode]);
+  }, [appMode, activeWorkspaceView, currentInvestigation]);
 
   const openInvestigationById = async (id: string) => {
-    // Check local history first
+    if (!id) return;
+
+    // Check memory history first
     const existing = history.find((h) => String(h.id) === id);
     if (existing) {
       setCurrentInvestigation(existing);
       setAppMode('workspace');
       setActiveWorkspaceView('investigations');
+      window.history.pushState({}, '', `/investigations/${id}`);
+      return;
+    }
+
+    if (id === 'demo-latency-01') {
+      setCurrentInvestigation(DEMO_INVESTIGATION_DATA);
+      setAppMode('workspace');
+      setActiveWorkspaceView('investigations');
+      window.history.pushState({}, '', `/investigations/${id}`);
       return;
     }
 
     const token = await getCurrentUserToken();
     if (!token) {
-      if (id === 'demo-latency-01') {
-        setCurrentInvestigation(DEMO_INVESTIGATION_DATA);
-        setAppMode('workspace');
-        setActiveWorkspaceView('investigations');
-      }
+      // Look up guest storage
+      try {
+        const saved = localStorage.getItem('morphos_guest_history');
+        if (saved) {
+          const parsed: InvestigationRecord[] = JSON.parse(saved);
+          const found = parsed.find((item) => String(item.id) === id);
+          if (found) {
+            setCurrentInvestigation(found);
+            setAppMode('workspace');
+            setActiveWorkspaceView('investigations');
+            window.history.pushState({}, '', `/investigations/${id}`);
+            return;
+          }
+        }
+      } catch {}
+      pushToast('Investigation record not found locally.', 'info');
       return;
     }
 
     try {
       setLoading(true);
       const data = await getInvestigationById(id, token);
-      setCurrentInvestigation(data as InvestigationRecord);
+      const record = data as InvestigationRecord;
+      record.id = record.id || id;
+      setCurrentInvestigation(record);
       setAppMode('workspace');
       setActiveWorkspaceView('investigations');
       window.history.pushState({}, '', `/investigations/${id}`);
@@ -325,43 +397,58 @@ export default function App() {
     if (token) {
       try {
         const result = await investigate(trimmed, token);
-        trackEvent({ name: 'investigation_completed', iterations: Number((result as InvestigationRecord).iteration ?? 1), confidenceTier: Number((result as InvestigationRecord).confidence ?? 0) >= 0.7 ? 'high' : Number((result as InvestigationRecord).confidence ?? 0) >= 0.4 ? 'medium' : 'low', mode: 'firebase' });
-        setCurrentInvestigation(result as InvestigationRecord);
-        setHistory((prev) => [result as InvestigationRecord, ...prev]);
+        const finalRecord: InvestigationRecord = {
+          ...result,
+          id: result.id,
+          question: trimmed,
+          domain: result.domain,
+          resultStatus: result.resultStatus || 'simulated',
+          isLocal: false,
+        };
+        trackEvent({
+          name: 'investigation_completed',
+          iterations: Number(finalRecord.iteration ?? 1),
+          confidenceTier: Number(finalRecord.confidence ?? 0) >= 0.7 ? 'high' : Number(finalRecord.confidence ?? 0) >= 0.4 ? 'medium' : 'low',
+          mode: 'firebase',
+        });
+        setCurrentInvestigation(finalRecord);
+        setHistory((prev) => [finalRecord, ...prev.filter((h) => h.id !== finalRecord.id)]);
         setAppMode('workspace');
         setActiveWorkspaceView('investigations');
-        window.history.pushState({}, '', `/investigations/${result.id ?? 'latest'}`);
+        window.history.pushState({}, '', `/investigations/${finalRecord.id}`);
         pushToast('Investigation completed successfully', 'success');
         void loadUserData();
       } catch (err: unknown) {
-        console.error('Investigation error:', err);
+        console.error('Backend investigation error, running local fallback:', err);
         trackEvent({ name: 'investigation_failed', reason: 'backend_error' });
-        // Fallback to local deterministic demo run if backend is offline or quota exceeded
+        // Fallback to local domain engine if backend is offline or quota exceeded
         handleLocalInvestigationRun(trimmed);
       } finally {
         setLoading(false);
       }
     } else {
-      // Local deterministic mode (when running in guest/demo mode without Firebase Auth)
+      // Local domain-aware deterministic mode (when running in guest mode without Firebase Auth)
       handleLocalInvestigationRun(trimmed);
     }
   };
 
   const handleLocalInvestigationRun = (promptText: string) => {
     setTimeout(() => {
-      const newRecord: InvestigationRecord = {
-        ...DEMO_INVESTIGATION_DATA,
-        id: `inv-${Date.now()}`,
-        question: promptText,
-        createdAt: new Date().toISOString(),
-      };
+      const newRecord = generateDomainInvestigation(promptText, undefined, true);
       setCurrentInvestigation(newRecord);
-      setHistory((prev) => [newRecord, ...prev.filter((h) => h.id !== newRecord.id)]);
+      setHistory((prev) => {
+        const next = [newRecord, ...prev.filter((h) => h.id !== newRecord.id)];
+        try {
+          localStorage.setItem('morphos_guest_history', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       setAppMode('workspace');
       setActiveWorkspaceView('investigations');
+      window.history.pushState({}, '', `/investigations/${newRecord.id}`);
       setLoading(false);
-      pushToast('Autonomous investigation concluded (Deterministic Engine)', 'success');
-    }, 1200);
+      pushToast('Autonomous investigation concluded (Local Engine)', 'success');
+    }, 1000);
   };
 
   const handleTryDemo = () => {
@@ -382,7 +469,13 @@ export default function App() {
         pushToast('Failed to delete on server, removing locally', 'info');
       }
     }
-    setHistory((prev) => prev.filter((item) => String(item.id) !== id));
+    setHistory((prev) => {
+      const next = prev.filter((item) => String(item.id) !== id);
+      try {
+        localStorage.setItem('morphos_guest_history', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     if (currentInvestigation && String(currentInvestigation.id) === id) {
       setCurrentInvestigation(null);
       setActiveWorkspaceView('overview');
@@ -518,9 +611,7 @@ Generated by MORPHOS — Autonomous AI Experimentation Platform
             activeView={activeWorkspaceView}
             onSelectView={(v) => {
               setActiveWorkspaceView(v);
-              if (v === 'overview') {
-                setCurrentInvestigation(null);
-              }
+              setCurrentInvestigation(null);
             }}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}

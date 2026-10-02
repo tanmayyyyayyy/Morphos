@@ -5,6 +5,10 @@ let firebaseEnabled = false;
 const isTestEnvironment = process.env.NODE_ENV === 'test';
 export let firebaseAdminConfigured = false;
 
+// In-memory persistence for local fallback when Firebase is not configured or during testing
+export const inMemoryInvestigations = new Map<string, Record<string, unknown>>();
+export const inMemoryFindings: Array<Record<string, unknown>> = [];
+
 function initializeFirebaseAdmin() {
   if (firebaseEnabled || isTestEnvironment) {
     return;
@@ -15,17 +19,25 @@ function initializeFirebaseAdmin() {
   );
 
   if (hasServiceAccount) {
-    admin.initializeApp({
-      projectId: config.firebaseProjectId,
-      credential: admin.credential.cert({
+    try {
+      admin.initializeApp({
         projectId: config.firebaseProjectId,
-        clientEmail: config.firebaseClientEmail,
-        privateKey: config.firebasePrivateKey,
-      }),
-    });
-    firebaseEnabled = true;
-    firebaseAdminConfigured = true;
-    return;
+        credential: admin.credential.cert({
+          projectId: config.firebaseProjectId,
+          clientEmail: config.firebaseClientEmail,
+          privateKey: config.firebasePrivateKey,
+        }),
+      });
+      firebaseEnabled = true;
+      firebaseAdminConfigured = true;
+      return;
+    } catch (error) {
+      console.warn('Firebase Admin SDK service-account initialization failed. Operating in fallback mode.', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      firebaseEnabled = false;
+      firebaseAdminConfigured = false;
+    }
   }
 
   if (config.isFirebaseConfigured) {
@@ -62,48 +74,67 @@ function stripUndefined(value: unknown): unknown {
   return value;
 }
 
-function normalizeInvestigation(record: Record<string, unknown>) {
+function normalizeInvestigation(record: Record<string, unknown>): Record<string, unknown> {
   const cleanRecord = stripUndefined(record) as Record<string, unknown>;
   return {
     ...cleanRecord,
-    createdAt: new Date().toISOString(),
+    createdAt: (cleanRecord.createdAt as string) || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 }
 
 export async function saveInvestigation(record: Record<string, unknown>) {
+  const payload = normalizeInvestigation(record);
+  const id = (record.id as string) || `inv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  payload.id = id;
+
   if (isTestEnvironment || !firebaseEnabled) {
+    inMemoryInvestigations.set(id, payload);
     return {
-      stored: false,
+      stored: true,
+      id,
       mode: 'dev-fallback',
-      record,
+      record: payload,
     };
   }
 
   try {
     const db = admin.firestore();
-    const ref = db.collection('investigations').doc();
-    const payload = normalizeInvestigation(record);
+    const ref = db.collection('investigations').doc(id);
     await ref.set(payload);
 
     return {
       stored: true,
       id: ref.id,
       mode: 'firebase',
+      record: payload,
     };
   } catch (error) {
     console.warn('Firebase persistence unavailable; switching to local fallback.', error);
+    inMemoryInvestigations.set(id, payload);
     return {
-      stored: false,
+      stored: true,
+      id,
       mode: 'dev-fallback',
-      record,
+      record: payload,
     };
   }
 }
 
 export async function getInvestigationsForUser(userId?: string) {
-  if (isTestEnvironment || !firebaseEnabled || !userId) {
+  if (!userId) {
     return [];
+  }
+
+  if (isTestEnvironment || !firebaseEnabled) {
+    const items = Array.from(inMemoryInvestigations.values()).filter(
+      (doc) => doc.userId === userId
+    );
+    return items.sort((a, b) => {
+      const aTime = new Date(String((a.updatedAt ?? a.createdAt ?? 0) as string)).getTime();
+      const bTime = new Date(String((b.updatedAt ?? b.createdAt ?? 0) as string)).getTime();
+      return bTime - aTime;
+    });
   }
 
   try {
@@ -116,29 +147,39 @@ export async function getInvestigationsForUser(userId?: string) {
       return bTime - aTime;
     });
   } catch (error) {
-    console.warn('Firestore history unavailable in this environment.', error);
-    return [];
+    console.warn('Firestore history unavailable in this environment; falling back to in-memory.', error);
+    const items = Array.from(inMemoryInvestigations.values()).filter(
+      (doc) => doc.userId === userId
+    );
+    return items.sort((a, b) => {
+      const aTime = new Date(String((a.updatedAt ?? a.createdAt ?? 0) as string)).getTime();
+      const bTime = new Date(String((b.updatedAt ?? b.createdAt ?? 0) as string)).getTime();
+      return bTime - aTime;
+    });
   }
 }
 
 export async function getInvestigationById(id: string) {
+  if (!id) return null;
+
   if (isTestEnvironment || !firebaseEnabled) {
-    return null;
+    return inMemoryInvestigations.get(id) ?? null;
   }
 
   try {
     const db = admin.firestore();
     const doc = await db.collection('investigations').doc(id).get();
-    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+    return doc.exists ? { id: doc.id, ...doc.data() } : inMemoryInvestigations.get(id) ?? null;
   } catch (error) {
     console.warn('Firestore detail lookup unavailable in this environment.', error);
-    return null;
+    return inMemoryInvestigations.get(id) ?? null;
   }
 }
 
 export async function saveFinding(record: Record<string, unknown>) {
   if (isTestEnvironment || !firebaseEnabled) {
-    return { stored: false, mode: 'dev-fallback', record };
+    inMemoryFindings.push(record);
+    return { stored: true, mode: 'dev-fallback', record };
   }
 
   try {
@@ -151,13 +192,23 @@ export async function saveFinding(record: Record<string, unknown>) {
     return { stored: true, mode: 'firebase' };
   } catch (error) {
     console.warn('Firebase findings persistence unavailable; using local fallback.', error);
-    return { stored: false, mode: 'dev-fallback', record };
+    inMemoryFindings.push(record);
+    return { stored: true, mode: 'dev-fallback', record };
   }
 }
 
 export async function deleteInvestigation(id: string, userId?: string) {
-  if (isTestEnvironment || !firebaseEnabled || !id || !userId) {
+  if (!id || !userId) {
     return false;
+  }
+
+  if (isTestEnvironment || !firebaseEnabled) {
+    const item = inMemoryInvestigations.get(id);
+    if (!item || item.userId !== userId) {
+      return false;
+    }
+    inMemoryInvestigations.delete(id);
+    return true;
   }
 
   try {
@@ -175,6 +226,7 @@ export async function deleteInvestigation(id: string, userId?: string) {
     }
 
     await ref.delete();
+    inMemoryInvestigations.delete(id);
     return true;
   } catch (error) {
     console.warn('Failed to delete investigation from Firestore.', error);

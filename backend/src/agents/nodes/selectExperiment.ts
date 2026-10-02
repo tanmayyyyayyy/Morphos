@@ -40,12 +40,32 @@ const scenarioToExperiment = {
 };
 
 export function selectExperiment(state: InvestigationState): InvestigationState {
-  const key = state.question.toLowerCase();
-  const selection = Object.entries(scenarioToExperiment).find(([scenario]) =>
-    key.includes(scenario) || (scenario === 'latency' && key.includes('api')) || (scenario === 'dataset' && key.includes('processing')),
-  )?.[1] ?? scenarioToExperiment.latency;
-
+  const domain = state.domain || 'general';
   const selectedHypothesis = state.hypotheses[0] ?? null;
+
+  // ML model performance does not have an in-repo execution sandbox
+  if (domain === 'ml_model_performance') {
+    return {
+      ...state,
+      selectedHypothesis,
+      experiment: null,
+      resultStatus: 'no_matching_template',
+      status: 'experiment_selected',
+      events: [
+        ...state.events,
+        createEvent('selectExperiment', 'No matching experiment template available for ML model evaluation; simulated result flagged'),
+      ],
+    };
+  }
+
+  const selection =
+    domain === 'database'
+      ? scenarioToExperiment.database
+      : domain === 'memory'
+      ? scenarioToExperiment.memory
+      : domain === 'api_latency'
+      ? scenarioToExperiment.latency
+      : scenarioToExperiment.dataset;
 
   return {
     ...state,
@@ -54,6 +74,7 @@ export function selectExperiment(state: InvestigationState): InvestigationState 
       ...selection,
       result: undefined,
     },
+    resultStatus: state.resultStatus === 'real' ? 'real' : 'simulated',
     status: 'experiment_selected',
     events: [...state.events, createEvent('selectExperiment', `Experiment selected: ${selection.name}`)],
   };

@@ -7,7 +7,7 @@
  * LangGraph connection: this file defines the graph edges, nodes, and conditional branching between generateHypotheses and finalize.
  */
 import { START, END, StateGraph, Annotation } from '@langchain/langgraph';
-import { createEvent, defaultState, InvestigationState, WorkflowEvent } from './state.js';
+import { createFreshState, InvestigationDomain, InvestigationState, ResultStatus, WorkflowEvent } from './state.js';
 import { interpretQuestion } from './nodes/interpretQuestion.js';
 import { generateHypotheses } from './nodes/generateHypotheses.js';
 import { selectExperiment } from './nodes/selectExperiment.js';
@@ -28,18 +28,13 @@ export function shouldContinue(state: InvestigationState): string {
   return 'generate_hypotheses';
 }
 
-export async function runInvestigation(question: string): Promise<InvestigationState> {
-  const initialState: InvestigationState = {
-    ...defaultState,
-    question,
-    iteration: 0,
-    maxIterations: 3,
-    status: 'starting',
-    events: [createEvent('graph', 'Investigation started')],
-  };
+export async function runInvestigation(question: string, id?: string): Promise<InvestigationState> {
+  const initialState = createFreshState(question, id);
 
   const InvestigationAnnotation = Annotation.Root({
+    id: Annotation<string>(),
     question: Annotation<string>(),
+    domain: Annotation<InvestigationDomain>(),
     interpretedProblem: Annotation<string>(),
     hypotheses: Annotation<any[]>({
       reducer: (left: any[] = [], right: any) => (Array.isArray(right) ? right : left.concat(right ?? [])),
@@ -54,11 +49,12 @@ export async function runInvestigation(question: string): Promise<InvestigationS
     maxIterations: Annotation<number>(),
     events: Annotation<WorkflowEvent[]>({
       reducer: (left: WorkflowEvent[] = [], right: WorkflowEvent | WorkflowEvent[]) =>
-        Array.isArray(right) ? left.concat(right) : left.concat([right]),
+        Array.isArray(right) ? right : left.concat([right]),
       default: () => [],
     }),
     finalConclusion: Annotation<string>(),
     status: Annotation<string>(),
+    resultStatus: Annotation<ResultStatus>(),
   });
 
   const workflow: any = new StateGraph(InvestigationAnnotation);
@@ -88,6 +84,9 @@ export async function runInvestigation(question: string): Promise<InvestigationS
 
   return {
     ...result,
+    id: result.id || initialState.id,
+    domain: result.domain || initialState.domain || 'general',
+    resultStatus: result.resultStatus || initialState.resultStatus || 'simulated',
     finalConclusion: result.finalConclusion || result.analysis || 'Investigation completed.',
   } as InvestigationState;
 }

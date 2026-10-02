@@ -59,12 +59,22 @@ export default function DemoInvestigationModal({
       return;
     }
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     const timer = setInterval(() => {
       setStep((prev) => (prev < demoSteps.length - 1 ? prev + 1 : prev));
     }, 2800);
 
-    return () => clearInterval(timer);
-  }, [isOpen, demoSteps.length]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      clearInterval(timer);
+    };
+  }, [isOpen, onClose, demoSteps.length]);
 
   return (
     <AnimatePresence>
@@ -82,13 +92,16 @@ export default function DemoInvestigationModal({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="demo-modal-title"
             className="relative w-full max-w-2xl bg-[#0A0A0A] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] z-10 space-y-6"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-2.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#FF7A00] animate-pulse" />
-                <span className="font-display font-bold text-xs tracking-[0.2em] uppercase text-white">
+                <span id="demo-modal-title" className="font-display font-bold text-xs tracking-[0.2em] uppercase text-white">
                   MORPHOS AUTONOMOUS DEMO WALKTHROUGH
                 </span>
               </div>

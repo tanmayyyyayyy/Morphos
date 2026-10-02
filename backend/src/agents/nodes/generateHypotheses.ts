@@ -139,38 +139,45 @@ const scenarioMap: Record<string, Hypothesis[]> = {
   ],
 };
 
-export async function generateHypotheses(state: InvestigationState): Promise<InvestigationState> {
-  const key = state.question.toLowerCase();
-  const matches = Object.keys(scenarioMap).filter((scenario) =>
-    key.includes(scenario) || (scenario === 'latency' && key.includes('api')) || (scenario === 'dataset' && key.includes('processing')),
-  );
+import { DOMAIN_HYPOTHESES } from '../domain.js';
 
-  let hypotheses: Hypothesis[] = matches.length ? scenarioMap[matches[0]] : [
-    ...scenarioMap.latency,
-    ...scenarioMap.database,
-  ].slice(0, 3);
+export async function generateHypotheses(state: InvestigationState): Promise<InvestigationState> {
+  const domain = state.domain || 'general';
+  let hypotheses: Hypothesis[] = [...(DOMAIN_HYPOTHESES[domain] ?? DOMAIN_HYPOTHESES.general)];
+  let resultStatus: 'real' | 'simulated' | 'no_matching_template' =
+    domain === 'ml_model_performance' ? 'no_matching_template' : 'simulated';
 
   if (model) {
     try {
       const prompt = ChatPromptTemplate.fromMessages([
-        ['system', 'You are MORPHOS, an autonomous investigation planner. Generate 2-4 structured hypotheses for a performance investigation.'],
-        ['human', 'Question: {question}\nReturn a JSON object with a hypotheses array where each item includes id, title, rationale, confidence, and evidence.'],
+        [
+          'system',
+          `You are MORPHOS, an autonomous investigation planner. You are investigating an issue in the domain: "${domain}".
+Generate 2-4 structured hypotheses strictly relevant to the question and the "${domain}" domain.
+Do NOT generate hypotheses from unrelated domains (for example: do not discuss database locks or worker sockets for machine learning model performance).`,
+        ],
+        [
+          'human',
+          'Question: {question}\nDomain: {domain}\nReturn a JSON object with a hypotheses array where each item includes id, title, rationale, confidence (0.0 to 1.0), and evidence (array of strings).',
+        ],
       ]);
-      const content = await prompt.invoke({ question: state.question });
+      const content = await prompt.invoke({ question: state.question, domain });
       const response = await model.invoke(content);
       const structured = response as { hypotheses?: Hypothesis[] };
       if (structured.hypotheses && structured.hypotheses.length > 0) {
         hypotheses = structured.hypotheses as Hypothesis[];
+        resultStatus = 'real';
       }
     } catch (error) {
-      console.warn('Falling back from Gemini hypothesis generation', error);
+      console.warn('Falling back from Gemini hypothesis generation; using domain-aware templates.', error);
     }
   }
 
   return {
     ...state,
     hypotheses,
+    resultStatus,
     status: 'hypotheses_ready',
-    events: [...state.events, createEvent('generateHypotheses', `Generated ${hypotheses.length} hypotheses`)],
+    events: [...state.events, createEvent('generateHypotheses', `Generated ${hypotheses.length} hypotheses for domain: ${domain}`)],
   };
 }

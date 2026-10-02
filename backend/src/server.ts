@@ -8,6 +8,9 @@ import { config } from './config.js';
 
 const app = express();
 
+// Trust reverse proxy (e.g. Render, Cloud Run, Heroku) for express-rate-limit and client IP resolution
+app.set('trust proxy', 1);
+
 const isTest = process.env.NODE_ENV === 'test';
 
 // ── Security Headers via Helmet ──────────────────────────────────────────────
@@ -32,7 +35,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(null, true); // Fallback for local development
+      return callback(new Error(`CORS: origin '${origin}' not allowed`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],

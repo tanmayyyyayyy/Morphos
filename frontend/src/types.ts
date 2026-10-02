@@ -1,3 +1,12 @@
+export type InvestigationDomain =
+  | 'ml_model_performance'
+  | 'api_latency'
+  | 'memory'
+  | 'database'
+  | 'general';
+
+export type ResultStatus = 'real' | 'simulated' | 'no_matching_template';
+
 export type InvestigationEvent = {
   type: 'node_completed' | 'status_changed' | 'error';
   node: string;
@@ -24,6 +33,8 @@ export type Experiment = {
 export type InvestigationResponse = {
   id?: string;
   question: string;
+  domain?: InvestigationDomain;
+  resultStatus?: ResultStatus;
   interpretedProblem: string;
   hypotheses: Hypothesis[];
   selectedHypothesis: Hypothesis | null;
@@ -37,11 +48,14 @@ export type InvestigationResponse = {
   finalConclusion: string;
   status: string;
   firebase?: { id?: string };
+  isLocal?: boolean;
 };
 
 export type InvestigationRecord = Record<string, unknown> & {
   id?: string;
   question?: string;
+  domain?: InvestigationDomain;
+  resultStatus?: ResultStatus;
   status?: string;
   confidence?: number;
   createdAt?: string;
@@ -57,6 +71,7 @@ export type InvestigationRecord = Record<string, unknown> & {
   experimentResult?: Record<string, unknown> | null;
   events?: Array<Record<string, unknown>>;
   userId?: string;
+  isLocal?: boolean;
 };
 
 export type AnalyticsState = {

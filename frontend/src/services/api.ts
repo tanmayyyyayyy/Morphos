@@ -1,30 +1,16 @@
-export type InvestigationEvent = {
-  type: 'node_completed' | 'status_changed' | 'error';
-  node: string;
-  timestamp: string;
-  message: string;
-};
+import {
+  InvestigationDomain,
+  InvestigationEvent,
+  InvestigationResponse,
+  ResultStatus,
+} from '../types';
 
-export type InvestigationResponse = {
-  id?: string;
-  question: string;
-  interpretedProblem: string;
-  hypotheses: Array<{ id: string; title: string; rationale: string; confidence: number; evidence: string[] }>;
-  selectedHypothesis: { id: string; title: string; rationale: string; confidence: number; evidence: string[] } | null;
-  experiment: { id: string; name: string; description: string; tool: string; inputs: Record<string, unknown> } | null;
-  experimentResult: Record<string, unknown> | null;
-  analysis: string;
-  confidence: number;
-  iteration: number;
-  maxIterations: number;
-  events: InvestigationEvent[];
-  finalConclusion: string;
-  status: string;
-  firebase?: { id?: string };
-};
+export type { InvestigationDomain, InvestigationEvent, InvestigationResponse, ResultStatus };
+
+export const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
 
 export async function investigate(question: string, authToken: string): Promise<InvestigationResponse> {
-  const response = await fetch('http://localhost:4000/api/investigate', {
+  const response = await fetch(`${API_BASE}/api/investigate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -41,7 +27,7 @@ export async function investigate(question: string, authToken: string): Promise<
 }
 
 export async function getInvestigations(authToken: string): Promise<Array<Record<string, unknown>>> {
-  const response = await fetch('http://localhost:4000/api/investigations', {
+  const response = await fetch(`${API_BASE}/api/investigations`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -53,7 +39,7 @@ export async function getInvestigations(authToken: string): Promise<Array<Record
 }
 
 export async function getInvestigationById(id: string, authToken: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`http://localhost:4000/api/investigations/${id}`, {
+  const response = await fetch(`${API_BASE}/api/investigations/${id}`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -67,7 +53,7 @@ export async function getInvestigationById(id: string, authToken: string): Promi
 }
 
 export async function getAnalytics(authToken: string): Promise<Record<string, unknown>> {
-  const response = await fetch('http://localhost:4000/api/analytics', {
+  const response = await fetch(`${API_BASE}/api/analytics`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -81,7 +67,7 @@ export async function getAnalytics(authToken: string): Promise<Record<string, un
 }
 
 export async function deleteInvestigation(id: string, authToken: string): Promise<{ success: boolean; deletedId: string }> {
-  const response = await fetch(`http://localhost:4000/api/investigations/${id}`, {
+  const response = await fetch(`${API_BASE}/api/investigations/${id}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${authToken}`,
@@ -96,7 +82,7 @@ export async function deleteInvestigation(id: string, authToken: string): Promis
 }
 
 export async function healthCheck(): Promise<{ status: string; timestamp: string }> {
-  const response = await fetch('http://localhost:4000/api/health');
+  const response = await fetch(`${API_BASE}/api/health`);
   if (!response.ok) {
     throw new Error('Health check failed');
   }

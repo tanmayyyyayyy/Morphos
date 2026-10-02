@@ -15,9 +15,12 @@ export async function executeExperiment(state: InvestigationState): Promise<Inve
   if (!experiment) {
     return {
       ...state,
-      experimentResult: { ok: false, error: 'No experiment selected' },
-      status: 'error',
-      events: [...state.events, createEvent('executeExperiment', 'Experiment execution failed', 'error')],
+      experimentResult: null,
+      status: 'experiment_skipped',
+      events: [
+        ...state.events,
+        createEvent('executeExperiment', 'Experiment execution skipped: simulated result (no matching template)'),
+      ],
     };
   }
 

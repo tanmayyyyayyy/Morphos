@@ -128,11 +128,15 @@ router.post('/investigate', requireAuth, async (req: AuthenticatedRequest, res) 
     }
 
     const investigation = await runInvestigation(parsed.question);
+    const investigationId = investigation.id || `inv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     const saved = await saveInvestigation({
+      id: investigationId,
       userId: uid,
       question: parsed.question,
+      domain: investigation.domain,
       interpretedProblem: investigation.interpretedProblem,
+      interpretation: investigation.interpretedProblem,
       hypotheses: investigation.hypotheses,
       selectedHypothesis: investigation.selectedHypothesis,
       experiment: investigation.experiment,
@@ -141,14 +145,22 @@ router.post('/investigate', requireAuth, async (req: AuthenticatedRequest, res) 
       confidence: investigation.confidence,
       iteration: investigation.iteration,
       finalConclusion: investigation.finalConclusion,
+      conclusion: investigation.finalConclusion,
       status: investigation.status,
+      resultStatus: investigation.resultStatus,
       events: investigation.events,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
+    const finalId = saved.id || investigationId;
+
     const response = {
       ...investigation,
+      id: finalId,
+      userId: uid,
+      domain: investigation.domain,
+      resultStatus: investigation.resultStatus,
       firebase: saved,
     };
 

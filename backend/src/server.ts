@@ -7,6 +7,7 @@ import investigationRouter from './routes/investigation.js';
 import { config } from './config.js';
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },

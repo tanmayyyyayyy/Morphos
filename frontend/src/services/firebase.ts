@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
   onAuthStateChanged,
   type Auth,
   type User,
@@ -82,6 +83,23 @@ export async function signOutUser() {
     return;
   }
   await signOut(auth);
+}
+
+export async function resetPassword(email: string) {
+  const { auth, available, configured } = initFirebaseAuth();
+  if (!configured || !available || !auth) {
+    throw new Error('Firebase authentication is not configured.');
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    console.info('AUTH DEBUG: password reset email sent to:', email);
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : 'unknown';
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('AUTH DEBUG: password reset error', { code, message });
+    throw error;
+  }
 }
 
 export async function getCurrentUserToken(): Promise<string | null> {

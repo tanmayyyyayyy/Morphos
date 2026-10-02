@@ -12,7 +12,11 @@ interface AuthenticatedRequest extends Request {
 }
 
 const investigateSchema = z.object({
-  question: z.string().min(8).max(1000),
+  question: z
+    .string()
+    .trim()
+    .min(8, 'Investigation question must be at least 8 characters long.')
+    .max(1000, 'Investigation question cannot exceed 1000 characters.'),
 });
 
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {

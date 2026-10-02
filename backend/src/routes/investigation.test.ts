@@ -85,6 +85,16 @@ describe('API', () => {
     const response = await request(app).get('/api/health');
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['ratelimit-limit']).toBe('100');
+  });
+
+  it('does not grant CORS access to unknown origins', async () => {
+    const response = await request(app)
+      .get('/api/health')
+      .set('Origin', 'https://untrusted.example');
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('runs an investigation request', async () => {

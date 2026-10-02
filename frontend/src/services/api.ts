@@ -23,8 +23,13 @@ export type InvestigationResponse = {
   firebase?: { id?: string };
 };
 
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+while (API_BASE_URL.endsWith('/')) {
+  API_BASE_URL = API_BASE_URL.slice(0, -1);
+}
+
 export async function investigate(question: string, authToken: string): Promise<InvestigationResponse> {
-  const response = await fetch('http://localhost:4000/api/investigate', {
+  const response = await fetch(`${API_BASE_URL}/api/investigate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -41,7 +46,7 @@ export async function investigate(question: string, authToken: string): Promise<
 }
 
 export async function getInvestigations(authToken: string): Promise<Array<Record<string, unknown>>> {
-  const response = await fetch('http://localhost:4000/api/investigations', {
+  const response = await fetch(`${API_BASE_URL}/api/investigations`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -53,7 +58,7 @@ export async function getInvestigations(authToken: string): Promise<Array<Record
 }
 
 export async function getInvestigationById(id: string, authToken: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`http://localhost:4000/api/investigations/${id}`, {
+  const response = await fetch(`${API_BASE_URL}/api/investigations/${id}`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -67,7 +72,7 @@ export async function getInvestigationById(id: string, authToken: string): Promi
 }
 
 export async function getAnalytics(authToken: string): Promise<Record<string, unknown>> {
-  const response = await fetch('http://localhost:4000/api/analytics', {
+  const response = await fetch(`${API_BASE_URL}/api/analytics`, {
     headers: {
       Authorization: `Bearer ${authToken}`,
     },
@@ -81,7 +86,7 @@ export async function getAnalytics(authToken: string): Promise<Record<string, un
 }
 
 export async function deleteInvestigation(id: string, authToken: string): Promise<{ success: boolean; deletedId: string }> {
-  const response = await fetch(`http://localhost:4000/api/investigations/${id}`, {
+  const response = await fetch(`${API_BASE_URL}/api/investigations/${id}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${authToken}`,
@@ -96,7 +101,7 @@ export async function deleteInvestigation(id: string, authToken: string): Promis
 }
 
 export async function healthCheck(): Promise<{ status: string; timestamp: string }> {
-  const response = await fetch('http://localhost:4000/api/health');
+  const response = await fetch(`${API_BASE_URL}/api/health`);
   if (!response.ok) {
     throw new Error('Health check failed');
   }

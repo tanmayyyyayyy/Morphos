@@ -14,6 +14,7 @@ import {
   InvestigationDomain,
   InvestigationState,
   ResultStatus,
+  VerificationStatus,
   WorkflowEvent,
 } from './state.js';
 import { interpretQuestion } from './nodes/interpretQuestion.js';
@@ -26,11 +27,23 @@ import { finalize } from './nodes/finalize.js';
 import { evaluateConfidence } from './nodes/evaluateConfidence.js';
 
 export function shouldContinue(state: InvestigationState): string {
-  if (state.confidence >= 0.7) {
+  // Enforce the max iteration guard before looping forever
+  if (state.iteration >= state.maxIterations) {
     return 'finalize';
   }
 
-  if (state.iteration >= state.maxIterations) {
+  // If no experiment was selected or no matching template is available, finalize without looping
+  if (state.resultStatus === 'no_matching_template' || !state.experiment || state.status === 'experiment_skipped') {
+    return 'finalize';
+  }
+
+  // Missing or unverified experiment results cannot establish experimental validation; finalize
+  if (!state.experimentResult || state.verificationStatus === 'unverified') {
+    return 'finalize';
+  }
+
+  // Experimental validation meeting the continuation threshold authorizes finalization
+  if (state.confidence >= 0.7) {
     return 'finalize';
   }
 
@@ -66,6 +79,9 @@ export async function runInvestigation(
     experimentResult: Annotation<any | null>(),
     analysis: Annotation<string>(),
     confidence: Annotation<number>(),
+    hypothesisConfidence: Annotation<number | undefined>(),
+    evidenceConfidence: Annotation<number | null | undefined>(),
+    verificationStatus: Annotation<VerificationStatus>(),
     iteration: Annotation<number>(),
     maxIterations: Annotation<number>(),
     events: Annotation<WorkflowEvent[]>({
@@ -113,5 +129,9 @@ export async function runInvestigation(
     ragSummary: result.ragSummary ?? initialState.ragSummary,
     resultStatus: result.resultStatus || initialState.resultStatus || 'simulated',
     finalConclusion: result.finalConclusion || result.analysis || 'Investigation completed.',
+    verificationStatus: result.verificationStatus || initialState.verificationStatus || 'unverified',
+    confidence: result.confidence ?? 0,
+    hypothesisConfidence: result.hypothesisConfidence ?? initialState.hypothesisConfidence ?? 0,
+    evidenceConfidence: result.evidenceConfidence ?? null,
   } as InvestigationState;
 }

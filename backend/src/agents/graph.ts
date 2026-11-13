@@ -8,6 +8,7 @@
  */
 import { START, END, StateGraph, Annotation } from '@langchain/langgraph';
 import type { RagSummary, RetrievedChunk } from '../rag/types.js';
+import { emitGraphState } from '../services/socket.js';
 import {
   createFreshState,
   CreateFreshStateOptions,
@@ -37,11 +38,64 @@ export function shouldContinue(state: InvestigationState): string {
   return 'generate_hypotheses';
 }
 
+function withTelemetry(
+  nodeName: string,
+  nodeFn: (state: InvestigationState) => Promise<InvestigationState> | InvestigationState,
+  userId?: string,
+) {
+  return async (state: InvestigationState): Promise<InvestigationState> => {
+    const nextState = await nodeFn(state);
+    const runId = nextState.id || state.id || 'unknown-run';
+    const targetUserId = userId ?? nextState.userId ?? state.userId;
+    const latestEvent = nextState.events[nextState.events.length - 1];
+
+    emitGraphState(
+      runId,
+      nodeName,
+      {
+        runId,
+        stage: nodeName,
+        status: nextState.status,
+        domain: nextState.domain,
+        confidence: nextState.confidence,
+        iteration: nextState.iteration,
+        message: latestEvent?.message ?? `Completed stage: ${nodeName}`,
+        timestamp: latestEvent?.timestamp ?? new Date().toISOString(),
+      },
+      targetUserId,
+    );
+
+    return nextState;
+  };
+}
+
 export async function runInvestigation(
   question: string,
   idOrOptions?: string | CreateFreshStateOptions,
+  userId?: string,
 ): Promise<InvestigationState> {
   const initialState = createFreshState(question, idOrOptions);
+  const runId = initialState.id!;
+  const resolvedUserId =
+    userId ??
+    initialState.userId ??
+    (typeof idOrOptions === 'object' ? idOrOptions.userId : undefined);
+
+  emitGraphState(
+    runId,
+    'started',
+    {
+      runId,
+      stage: 'started',
+      status: initialState.status,
+      domain: initialState.domain,
+      confidence: initialState.confidence,
+      iteration: initialState.iteration,
+      message: 'Investigation started',
+      timestamp: new Date().toISOString(),
+    },
+    resolvedUserId,
+  );
 
   const InvestigationAnnotation = Annotation.Root({
     id: Annotation<string>(),
@@ -80,14 +134,17 @@ export async function runInvestigation(
 
   const workflow: any = new StateGraph(InvestigationAnnotation);
 
-  workflow.addNode('interpretQuestion', interpretQuestion);
-  workflow.addNode('retrieveKnowledge', retrieveKnowledge);
-  workflow.addNode('generateHypotheses', generateHypotheses);
-  workflow.addNode('selectExperiment', selectExperiment);
-  workflow.addNode('executeExperiment', async (state: InvestigationState) => executeExperiment(state));
-  workflow.addNode('analyzeResults', analyzeResults);
-  workflow.addNode('evaluateConfidence', evaluateConfidence);
-  workflow.addNode('finalize', finalize);
+  workflow.addNode('interpretQuestion', withTelemetry('interpretQuestion', interpretQuestion, resolvedUserId));
+  workflow.addNode('retrieveKnowledge', withTelemetry('retrieveKnowledge', retrieveKnowledge, resolvedUserId));
+  workflow.addNode('generateHypotheses', withTelemetry('generateHypotheses', generateHypotheses, resolvedUserId));
+  workflow.addNode('selectExperiment', withTelemetry('selectExperiment', selectExperiment, resolvedUserId));
+  workflow.addNode(
+    'executeExperiment',
+    withTelemetry('executeExperiment', async (state: InvestigationState) => executeExperiment(state), resolvedUserId),
+  );
+  workflow.addNode('analyzeResults', withTelemetry('analyzeResults', analyzeResults, resolvedUserId));
+  workflow.addNode('evaluateConfidence', withTelemetry('evaluateConfidence', evaluateConfidence, resolvedUserId));
+  workflow.addNode('finalize', withTelemetry('finalize', finalize, resolvedUserId));
 
   workflow.addEdge(START, 'interpretQuestion');
   workflow.addEdge('interpretQuestion', 'retrieveKnowledge');

@@ -1,3 +1,4 @@
+import { getStageIndexFromNode, subscribeToGraphUpdates } from '../services/socket';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -340,6 +341,7 @@ export default function Dashboard() {
     setDemoMode(trimmed === 'Why is API latency increasing?');
     setWorkflowStage(0);
 
+    let unsubscribeTelemetry: (() => void) | null = null;
     try {
       const token = await getCurrentUserToken();
       if (!token) {
@@ -347,6 +349,13 @@ export default function Dashboard() {
         setLoading(false);
         return;
       }
+
+      unsubscribeTelemetry = subscribeToGraphUpdates(token, (event) => {
+        const stageIdx = getStageIndexFromNode(event.state);
+        if (stageIdx >= 0) {
+          setWorkflowStage(stageIdx);
+        }
+      });
 
       const investigation = await investigate(trimmed, token);
       setDetailInvestigation(investigation as unknown as InvestigationRecord);
@@ -360,6 +369,7 @@ export default function Dashboard() {
       setError('The investigation failed. Please verify the backend is running and your Firebase session is valid.');
       pushToast('Investigation failed. Please try again.', 'error');
     } finally {
+      unsubscribeTelemetry?.();
       setLoading(false);
       setWorkflowStage(0);
     }

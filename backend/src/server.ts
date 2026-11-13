@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import investigationRouter from './routes/investigation.js';
 import knowledgeRouter from './routes/knowledge.js';
 import { config } from './config.js';
+import { closeSocket, initSocket } from './services/socket.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -90,6 +91,7 @@ if (isMain) {
   const server = app.listen(config.port, '0.0.0.0', () => {
     console.log(`MORPHOS backend listening on port ${config.port}`);
   });
+  initSocket(server, config.frontendOrigin);
 
   // Optimize HTTP keep-alive timeouts for high-traffic reverse proxies (ALB, Nginx, Cloudflare)
   server.keepAliveTimeout = 65000;
@@ -98,6 +100,7 @@ if (isMain) {
   // Graceful shutdown handling for container autoscaling
   const shutdown = (signal: string) => {
     console.log(`[SHUTDOWN] Received ${signal}. Draining active connections...`);
+    void closeSocket();
     server.close(() => {
       console.log('[SHUTDOWN] HTTP server closed gracefully.');
       process.exit(0);

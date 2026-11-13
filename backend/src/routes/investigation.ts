@@ -122,6 +122,9 @@ router.post('/investigate', requireAuth, async (req: AuthenticatedRequest, res) 
       experimentResult: investigation.experimentResult,
       analysis: investigation.analysis,
       confidence: investigation.confidence,
+      hypothesisConfidence: investigation.hypothesisConfidence,
+      evidenceConfidence: investigation.evidenceConfidence,
+      verificationStatus: investigation.verificationStatus,
       iteration: investigation.iteration,
       finalConclusion: investigation.finalConclusion,
       conclusion: investigation.finalConclusion,
@@ -140,6 +143,9 @@ router.post('/investigate', requireAuth, async (req: AuthenticatedRequest, res) 
       userId: uid,
       domain: investigation.domain,
       resultStatus: investigation.resultStatus,
+      verificationStatus: investigation.verificationStatus,
+      hypothesisConfidence: investigation.hypothesisConfidence,
+      evidenceConfidence: investigation.evidenceConfidence,
       firebase: saved,
     };
 

@@ -17,6 +17,8 @@ export type InvestigationDomain =
 
 export type ResultStatus = 'real' | 'simulated' | 'no_matching_template';
 
+export type VerificationStatus = 'unverified' | 'inconclusive' | 'validated';
+
 export type WorkflowEvent = {
   type: 'node_completed' | 'status_changed' | 'error';
   node: string;
@@ -57,6 +59,9 @@ export type InvestigationState = {
   experimentResult: Record<string, unknown> | null;
   analysis: string;
   confidence: number;
+  hypothesisConfidence?: number;
+  evidenceConfidence?: number | null;
+  verificationStatus: VerificationStatus;
   iteration: number;
   maxIterations: number;
   events: WorkflowEvent[];
@@ -90,6 +95,9 @@ export const defaultState: InvestigationState = {
   experimentResult: null,
   analysis: '',
   confidence: 0,
+  hypothesisConfidence: 0,
+  evidenceConfidence: null,
+  verificationStatus: 'unverified',
   iteration: 0,
   maxIterations: 3,
   events: [],
@@ -132,6 +140,9 @@ export function createFreshState(
     experimentResult: null,
     analysis: '',
     confidence: 0,
+    hypothesisConfidence: 0,
+    evidenceConfidence: null,
+    verificationStatus: 'unverified',
     iteration: 0,
     maxIterations: 3,
     events: [createEvent('graph', 'Investigation started')],
